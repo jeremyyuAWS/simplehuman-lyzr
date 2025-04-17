@@ -1,4 +1,5 @@
 import { Message, ConversationContext } from '../types';
+import { supabase } from '../utils/supabaseClient';
 
 interface ChatInferenceResponse {
   message: {
@@ -32,35 +33,41 @@ export const callChatInference = async (
   context: ConversationContext = {} as ConversationContext
 ): Promise<any> => {
   try {
+    // Get the current session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('No active session');
+    }
+
     // Construct the URL for the Supabase Edge Function
     const apiUrl = 'https://opgiszqogqvedfcvvuvj.supabase.co/functions/v1/chat-inference';
     
-    // Prepare the request payload
+    // Prepare the request payload matching the edge function's expected structure
     const payload = {
       message,
-      context: {
-        userIntents: context.userIntents,
-        productInterests: context.productInterests,
-        roomTypes: context.roomTypes,
-        features: context.features,
-        issues: context.issues,
-        conversationStage: context.conversationStage,
+      history: context.history || [],
+      user_info: {
+        user_id: session.user.id,
+        preferences: {
+          room_type: context.roomTypes,
+          product_interest: context.productInterests
+        }
       }
     };
 
-    // Make the API call
+    // Make the API call with authentication
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Add CORS headers to allow the request
-        'Access-Control-Allow-Origin': '*',
+        'Authorization': `Bearer ${session.access_token}`
       },
       body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
     }
 
     const data: ChatInferenceResponse = await response.json();

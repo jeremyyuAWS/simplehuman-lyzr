@@ -168,6 +168,7 @@ export interface ConversationContext {
   lastProductCategory?: string;
   preferredFinish?: string;
   previousQuestions: string[];
+  history: Message[];
   conversationStage: 'initial' | 'discovery' | 'recommendation' | 'troubleshooting' | 'post-purchase' | 'confirmation';
   lastMessageTime: Date;
 }

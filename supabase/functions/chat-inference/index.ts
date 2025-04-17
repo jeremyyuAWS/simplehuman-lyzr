@@ -1,5 +1,6 @@
 // Follow Deno Deploy's ES modules URLs convention
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -355,55 +356,48 @@ function generateResponse(request: ChatRequest): ChatResponse {
 }
 
 serve(async (req) => {
-  // Handle CORS for local development
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      },
-    });
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const data = await req.json();
-    
-    // Validate input
-    if (!data.message) {
-      throw new Error("Message is required");
+    // Get the authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
-    
-    // Process request
-    const response = generateResponse(data);
+
+    // Verify the JWT token
+    const token = authHeader.replace('Bearer ', '');
+    // Add your JWT verification logic here
+
+    const { message, history = [], user_info } = await req.json();
+
+    const response = generateResponse({
+      message,
+      history,
+      user_info
+    });
 
     return new Response(
       JSON.stringify(response),
       { 
-        headers: { 
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   } catch (error) {
     return new Response(
-      JSON.stringify({ 
-        error: error.message || "An unexpected error occurred", 
-        message: {
-          text: "I'm sorry, I encountered an error processing your request. Please try again."
-        },
-        context: {
-          customer_intent: "error"
-        }
-      }),
+      JSON.stringify({ error: error.message }),
       { 
         status: 400,
-        headers: { 
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
